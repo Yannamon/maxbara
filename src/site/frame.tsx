@@ -23,13 +23,15 @@ export function SiteHeader({
     <header className="site-header">
       <div className="shell header-row">
         <a className="wordmark" href={home} aria-label={`Max Bara — ${t.home}`}>
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
+          <span className="brand-logo" aria-hidden="true"><img src="/maxbaralogo.png" alt="" width={1024} height={1024} /></span>
           Max Bara<span className="brand-period" aria-hidden="true">.</span>
         </a>
         <nav className="header-nav" aria-label={t.nav.label}>
           <a href={`${home}#services`}>{t.nav.services}</a>
           <a href={`${home}#tarifs`}>{t.nav.pricing}</a>
-          <a href={intakePaths[locale].list}>{intakeCopy[locale].account}</a>
+          <a href={locale === "fr" ? "/checklist" : "/en/checklist"}>Checklist</a>
+          <a href={locale === "fr" ? "/rendez-vous" : "/en/appointments"}>{locale === "fr" ? "Rendez-vous" : "Book an appointment"}</a>
+          <a href="/dashboard">{intakeCopy[locale].account}</a>
         </nav>
         <div className="header-actions">
           <div className="language-switch" aria-label={locale === "fr" ? "Langue" : "Language"}>
@@ -52,7 +54,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
   return (
     <footer className="site-footer">
       <div className="shell footer-row">
-        <div><a className="footer-brand" href={home}>Max Bara.</a><p>{t.footer}</p></div>
+        <div><a className="footer-brand" href={home}><span className="brand-logo" aria-hidden="true"><img src="/maxbaralogo.png" alt="" width={1024} height={1024} /></span>Max Bara.</a><p>{t.footer}</p></div>
         <nav aria-label={locale === "fr" ? "Pied de page" : "Footer"}>
           <a href={`${home}#services`}>{t.nav.services}</a>
           <a href={`${home}#tarifs`}>{t.nav.pricing}</a>

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { RegistrationSummary } from "../intake/registration-summary";
+import { DocumentDraftReview } from "../intake/document-review";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { pricing } from "../config/pricing";
@@ -25,7 +27,7 @@ function AdminFrame({ locale, alternateHref, children }: { locale: Locale; alter
         <div className="shell header-row admin-header">
           <div className="admin-brand">
             <a className="wordmark" href={adminPath(locale)}>
-              <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
+              <span className="brand-logo" aria-hidden="true"><img src="/maxbaralogo.png" alt="" width={1024} height={1024} /></span>
               Max Bara<span className="brand-period" aria-hidden="true">.</span>
             </a>
             <span>{t.title}</span>
@@ -253,6 +255,8 @@ export async function AdminCasePage({ locale, reference, query }: { locale: Loca
         <div className="admin-detail-grid">
           <div>
             <ProgressForm locale={locale} record={record} />
+            <RegistrationSummary locale={locale} details={record.intake?.details} />
+            <DocumentDraftReview caseId={record.id} locale={locale} />
             <CaseDeadlines locale={locale} record={record} />
             <section className="intake-card" id="pieces">
               <h2>{t.documents}</h2>

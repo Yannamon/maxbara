@@ -1,15 +1,19 @@
 import "server-only";
 import { Pool, type PoolClient } from "pg";
+import { validDatabaseUrl } from "../config/database";
 
 let pool: Pool | undefined;
 
 export function databaseConfigured() {
-  return Boolean(process.env.DATABASE_URL);
+  return validDatabaseUrl(process.env.DATABASE_URL);
 }
 
 export function db() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is missing.");
+  if (!validDatabaseUrl(connectionString)) {
+    throw new Error("DATABASE_URL must be a PostgreSQL connection string from Supabase Connect, not the HTTPS project API URL.");
+  }
   if (!pool) {
     pool = new Pool({ connectionString, max: 3, connectionTimeoutMillis: 5000 });
     pool.on("error", (error) => console.error("An idle database connection failed.", error.message));

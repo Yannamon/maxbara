@@ -5,6 +5,7 @@ import { copy, money, paths } from "./copy";
 import { SiteFrame } from "./frame";
 import { QuizForm } from "./quiz-form";
 import { Receipt } from "./receipt";
+import { HeroBackdrop, HeroBanner } from "./motion";
 
 export function Landing({ locale }: { locale: Locale }) {
   const t = copy[locale];
@@ -18,25 +19,27 @@ export function Landing({ locale }: { locale: Locale }) {
 
   return (
     <SiteFrame locale={locale}>
-      <main>
-        <section className="shell hero">
+      <main className="landing">
+        <HeroBanner>
           <div className="hero-copy">
             <p className="eyebrow hero-eyebrow">{t.hero.eyebrow}</p>
             <h1>{t.hero.title}<br /><em>{t.hero.emphasis}</em></h1>
             <p className="hero-description">{t.hero.description}</p>
             <div className="hero-actions">
               <a className="button" href="#devis">{t.nav.estimate}</a>
+              <a className="hero-secondary" href="#tarifs">{t.nav.pricing}</a>
               <span>{t.hero.free}</span>
             </div>
           </div>
           <div className="receipt-stage">
+            <HeroBackdrop />
             <div className="stage-rule" aria-hidden="true" />
             <Receipt locale={locale} reference={t.receipt.exampleRef} name={t.receipt.exampleName}
               capital={pricing.scenario.capitalFcfa} total={example.totalFcfa} sample
               rows={[{ label: t.receipt.related, amountFcfa: formation }, { label: t.receipt.service, amountFcfa: support }]} />
             <a className="stage-link" href="#devis">{t.receipt.show}</a>
           </div>
-        </section>
+        </HeroBanner>
 
         <section className="shell services" id="services" aria-label={t.nav.services}>
           {t.services.map((item) => (

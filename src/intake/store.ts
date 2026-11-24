@@ -30,7 +30,7 @@ type StoredCase = {
 };
 type CaseDocument = { document_type: string; original_filename: string };
 
-export const paymentMethods = ["manual", "orange_money", "mtn_momo", "wave", "card"] as const;
+export const paymentMethods = ["manual", "orange_money", "mtn_momo", "wave", "card", "paystack"] as const;
 type PaymentMethod = (typeof paymentMethods)[number];
 
 export async function listCases(user: User) {
@@ -73,9 +73,15 @@ export async function readDocuments(caseId: string) {
   return result.rows;
 }
 
+export async function readDocumentDrafts(caseId: string) {
+  const result = await db().query<{ document_type: string; fields: Record<string, string> }>(
+    "select document_type,fields from public.document_drafts where case_id=$1", [caseId]);
+  return Object.fromEntries(result.rows.map(row => [row.document_type, row.fields]));
+}
+
 export async function createCase(
   user: User, locale: Locale, token: string, name: string, company: string,
-  quiz: Extract<Quiz, { state: "quoted" }>, flags: Intake["flags"],
+  quiz: Extract<Quiz, { state: "quoted" | "review" }>, flags: Intake["flags"], details?: Intake["details"],
 ) {
   return transaction(async (client) => {
     // Serialize retries before looking up an existing application.
@@ -95,9 +101,9 @@ export async function createCase(
       on conflict (auth_user_id) do update
         set display_name = excluded.display_name, phone = excluded.phone, locale = excluded.locale
       returning id
-    `, [user.id, name, user.phone, locale]);
+    `, [user.id, name, user.phone || null, locale]);
     const ownerId = profile.rows[0].id;
-    const { answers, quote } = quiz;
+    const { answers } = quiz;
     const companyRow = await client.query<{ id: string }>(`
       insert into public.companies (owner_id, name, legal_form, capital_fcfa)
       values ($1, $2, $3, $4) returning id
@@ -106,14 +112,17 @@ export async function createCase(
     const caseRow = await client.query<{ id: string }>(`
       insert into public.cases (company_id, reference, intake, intake_token)
       values ($1, $2, $3, $4) returning id
-    `, [companyRow.rows[0].id, reference, JSON.stringify({ answers, flags }), token]);
+    `, [companyRow.rows[0].id, reference, JSON.stringify({ answers, flags, details }), token]);
     const caseId = caseRow.rows[0].id;
-    await client.query(`
+    if (quiz.state === "quoted") {
+      const { quote } = quiz;
+      await client.query(`
       insert into public.quotes (case_id, package, kind, statutes, currency, lines,
         total_fcfa, cost_floor_fcfa, requires_verification)
       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `, [caseId, quote.package, quote.kind, quote.statutes, quote.currency, JSON.stringify(quote.lines),
       quote.totalFcfa, quote.costFloorFcfa, quote.requiresVerification]);
+    }
     await client.query(`
       insert into public.case_events (case_id, actor_id, event_type) values ($1, $2, 'draft')
     `, [caseId, ownerId]);
@@ -195,7 +204,7 @@ export async function choosePayment(user: User, reference: string, method: Payme
       ) q where q.kind = 'estimate'
       on conflict (quote_id) where status in ('pending', 'paid')
         do update set method = excluded.method
-        where public.payments.status = 'pending'
+        where public.payments.status = 'pending' and public.payments.method <> 'paystack'
       returning id
     `, [record.id, method]);
     return result.rowCount ? "payment_saved" : "unavailable";

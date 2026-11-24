@@ -1,10 +1,12 @@
 import "server-only";
 import type { PoolClient } from "pg";
 import type { Estimate } from "../site/answers";
+import type { Intake } from "../intake/documents";
 import { db, transaction } from "../server/database";
 import { deliveryDays, pageSize, reviewHours, type CaseStatus, type Filters } from "./model";
 
 type CaseRow = {
+  intake: Intake | null;
   id: string;
   reference: string;
   status: CaseStatus;
@@ -21,7 +23,7 @@ type CaseRow = {
 
 const deadlineParams = [reviewHours, deliveryDays * 24];
 const caseColumns = `
-  c.id, c.reference, c.status, c.created_at, co.name as company_name, co.legal_form,
+  c.id, c.reference, c.status, c.created_at, c.intake, co.name as company_name, co.legal_form,
   q.kind, q.total_fcfa, q.total_fcfa - q.cost_floor_fcfa as margin_fcfa,
   coalesce(q.requires_verification, false) as requires_verification,
   case when c.status = 'submitted' and c.reviewed_at is null

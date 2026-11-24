@@ -135,7 +135,7 @@ export async function sendCase(locale: Locale, reference: string) {
 
 export async function savePayment(locale: Locale, reference: string, form: FormData) {
   const user = await signedIn(locale);
-  const method = paymentMethods.find((item) => item === form.get("method"));
+  const method = paymentMethods.find((item) => item === "manual" && item === form.get("method"));
   if (!method) reportCase(locale, reference, "unavailable", "paiement");
   let result;
   try {

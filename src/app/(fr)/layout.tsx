@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { PageEntrance, SiteMotion } from "../../site/motion";
 import "../globals.css";
+import "../landing.css";
 
 export const metadata: Metadata = {
   title: "Max Bara | Création d’entreprise en Côte d’Ivoire",
@@ -8,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function FrenchLayout({ children }: { children: ReactNode }) {
-  return <html lang="fr"><body>{children}</body></html>;
+  return <html lang="fr"><body><SiteMotion><PageEntrance>{children}</PageEntrance></SiteMotion></body></html>;
 }

@@ -3,13 +3,12 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { ivorianPhone } from "./phone";
+import { supabaseAuthConfig } from "../config/supabase";
 
 export const pendingPhoneCookie = "mb-pending-phone";
 
 export function authConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  return url && key ? { url, key } : null;
+  return supabaseAuthConfig();
 }
 
 export async function authClient() {
@@ -36,7 +35,7 @@ export async function currentUser() {
   if (!client) return null;
   const { data } = await client.auth.getUser();
   const phone = ivorianPhone(data.user?.phone);
-  return data.user && phone ? { id: data.user.id, phone } : null;
+  return data.user ? { id: data.user.id, phone: phone ?? "", email: data.user.email ?? "" } : null;
 }
 
 export const documentBucket = "case-documents";

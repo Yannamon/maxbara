@@ -8,14 +8,19 @@ import { readQuiz, type Locale, type Query } from "../site/answers";
 import { copy, money, otherLocale, paths } from "../site/copy";
 import { SiteFrame } from "../site/frame";
 import { Receipt } from "../site/receipt";
-import { addFile, resetPhone, saveCase, savePayment, sendCase, sendOtp, signOut, toggleManualPayment, verifyOtp } from "./actions";
+import { addFile, resetPhone, savePayment, sendCase, sendOtp, signOut, toggleManualPayment, verifyOtp } from "./actions";
 import { intakeCopy } from "./copy";
-import { checklist, checklistSource, intakeFlags } from "./documents";
+import { checklist, checklistSource } from "./documents";
 import { casePath, intakePaths } from "./paths";
 import { ivorianPhone } from "./phone";
-import { intakeDatabaseConfigured, listCases, paymentMethods, readCase, readDocuments } from "./store";
+import { intakeDatabaseConfigured, listCases, readCase, readDocuments, readDocumentDrafts } from "./store";
 import { authConfig, currentUser, pendingPhoneCookie } from "./supabase";
 import { UploadPicker } from "./upload-picker";
+import { RegistrationSummary } from "./registration-summary";
+import { RegistrationForm } from "./registration-form";
+import { DocumentModal } from "./document-modal";
+import { paystackConfig } from "../payments/paystack";
+import { payWithPaystack } from "../payments/actions";
 
 type RecordDetails = NonNullable<Awaited<ReturnType<typeof readCase>>>;
 
@@ -32,49 +37,23 @@ export async function IntakeStart({ locale, query }: { locale: Locale; query: Pr
   const params = await query;
   const quiz = readQuiz(params);
   const t = intakeCopy[locale];
-  const ready = Boolean(authConfig()) && intakeDatabaseConfigured();
-  const user = ready && quiz.state !== "review" ? await currentUser() : null;
-  if (user && quiz.state !== "quoted") redirect(intakePaths[locale].list);
+  const ready = Boolean(authConfig());
+  const user = ready ? await currentUser() : null;
+
   const phone = ready && !user ? ivorianPhone((await cookies()).get(pendingPhoneCookie)?.value) : null;
   const back = quiz.suffix ? `${paths[locale].quote}${quiz.suffix}#resultat` : `${paths[locale].home}#devis`;
 
   return (
     <SiteFrame locale={locale} section="start" suffix={quiz.suffix}>
-      <main className="shell handoff intake-start">
+      <main className="shell handoff intake-start application-start">
         <section className="intake-card">
           {quiz.state === "quoted" && <p className="eyebrow">{quiz.reference}</p>}
           <h1>{t.start}</h1>
           <Feedback locale={locale} code={params.message} />
-          {quiz.state === "review" ? (
-            <p>{t.review}</p>
-          ) : !ready ? (
+          {!ready ? (
             <p>{t.unavailable}</p>
-          ) : user && quiz.state === "quoted" ? (
-            <>
-              <div className="intake-project">
-                <div>
-                  <h2>{t.project}</h2>
-                  <p>{quiz.answers.form} · {copy[locale].quiz.sectors[quiz.answers.sector]} · {copy[locale].packages[quiz.answers.package]}</p>
-                </div>
-                <strong>{quiz.quote.kind === "starting_at" && `${copy[locale].receipt.from} `}{money(quiz.quote.totalFcfa, locale)} FCFA</strong>
-              </div>
-              <form className="intake-form" action={saveCase.bind(null, locale, quiz.suffix, randomUUID())}>
-                <p>{t.projectHint}</p>
-                <label className="form-field"><span>{t.name}</span>
-                  <input name="name" autoComplete="name" required maxLength={120} />
-                </label>
-                <label className="form-field"><span>{t.company}</span>
-                  <input name="company" autoComplete="organization" required maxLength={120} />
-                </label>
-                <fieldset className="intake-flags">
-                  <legend>{t.conditions}</legend>
-                  {intakeFlags.map((flag) => (
-                    <label key={flag}><input type="checkbox" name={flag} /><span>{t.flags[flag]}</span></label>
-                  ))}
-                </fieldset>
-                <button className="button" type="submit">{t.create}</button>
-              </form>
-            </>
+          ) : user ? (
+            <RegistrationForm locale={locale} token={randomUUID()} answers={quiz.answers} email={user.email} configured={intakeDatabaseConfigured()} />
           ) : phone ? (
             <>
               <p>{t.sentTo} •••• {phone.slice(-4)}.</p>
@@ -91,7 +70,7 @@ export async function IntakeStart({ locale, query }: { locale: Locale; query: Pr
             </>
           ) : (
             <>
-              <p>{t.loginHint}</p>
+              <p>{t.loginHint}</p><a className="text-action" href="/login">{locale === "fr" ? "Connexion par email" : "Sign in with email"}</a>
               <form className="intake-form" action={sendOtp.bind(null, locale, quiz.suffix)}>
                 <label className="form-field"><span>{t.phone}</span>
                   <input name="phone" type="tel" autoComplete="tel" placeholder="+225" maxLength={25} required />
@@ -100,7 +79,7 @@ export async function IntakeStart({ locale, query }: { locale: Locale; query: Pr
               </form>
             </>
           )}
-          <a className="text-action" href={back}>{quiz.suffix ? t.backToQuote : t.newQuote}</a>
+          <a className="text-action" href={back}>{quiz.suffix ? t.backToQuote : t.newQuote}</a><a className="text-action" href={locale === "fr" ? "/rendez-vous" : "/en/appointments"}>{locale === "fr" ? "Prendre rendez-vous" : "Book an appointment"}</a>
         </section>
       </main>
     </SiteFrame>
@@ -155,12 +134,18 @@ function Payment({ locale, record }: { locale: Locale; record: RecordDetails }) 
         <>
           <form className="intake-form" action={savePayment.bind(null, locale, record.reference)}>
             <label className="form-field select-field"><span>{t.methodLabel}</span>
-              <select name="method" defaultValue={record.payment_method ?? "manual"}>
-                {paymentMethods.map((method) => <option value={method} key={method}>{t.methods[method]}</option>)}
-              </select>
+              <input type="hidden" name="method" value="manual" />
+              <span>{t.methods.manual}</span>
             </label>
-            <p>{t.manualNote}</p><p>{t.stubNote}</p>
-            <button type="submit" className="button button-outline">{t.saveMethod}</button>
+            <p>{t.manualNote}</p>
+            <button type="submit" className="button button-outline" disabled={record.payment_method === "paystack"}>{t.saveMethod}</button>
+          </form>
+          <form className="intake-form" action={payWithPaystack.bind(null, locale, record.reference)}>
+            <label className="form-field"><span>{locale === "fr" ? "Email pour le reçu" : "Receipt email"}</span><input name="email" type="email" required maxLength={254} defaultValue={record.intake?.details?.email ?? ""} autoComplete="email" /></label>
+            <p>{locale === "fr" ? "Réglez sur la page sécurisée Paystack. Les moyens disponibles dépendent de votre compte et de votre pays." : "Pay on Paystack’s secure checkout. Available payment methods depend on your account and country."}</p>
+            {!paystackConfig() && <p role="status">{locale === "fr" ? "Le paiement en ligne sera disponible prochainement." : "Online payment is not available yet."}</p>}
+            {paystackConfig()?.mode === "test" && <p>{locale === "fr" ? "Mode test : aucun paiement réel." : "Test mode: no real payment."}</p>}
+            <button className="button" disabled={!paystackConfig()}>{locale === "fr" ? "Payer avec Paystack" : "Pay with Paystack"}</button>
           </form>
         </>
       )}
@@ -185,6 +170,7 @@ export async function Application({
   const t = intakeCopy[locale];
   const site = copy[locale];
   const uploads = record.is_owner && record.intake ? await readDocuments(record.id) : [];
+  const drafts = record.is_owner && record.intake ? await readDocumentDrafts(record.id) : {};
   const date = record.expected_date
     ? new Intl.DateTimeFormat(locale === "fr" ? "fr-CI" : "en-GB", { dateStyle: "long", timeZone: "UTC" })
       .format(new Date(`${record.expected_date}T00:00:00Z`))
@@ -207,6 +193,8 @@ export async function Application({
         </section>
         <div className={`intake-case-grid${record.is_owner && record.intake ? "" : " intake-case-single"}`}>
           <div className="intake-case-files">
+            <RegistrationSummary locale={locale} details={record.intake?.details} />
+            {!record.quote_id && <p className="intake-card">{locale === "fr" ? "Votre projet nécessite une étude tarifaire. Un devis doit être confirmé par l’équipe." : "Your project needs a pricing review. The team must confirm a quote."}</p>}
             {record.is_owner && record.intake && (
               <section className="intake-card" id="pieces">
                 <h2>{t.docs}</h2>
@@ -227,8 +215,11 @@ export async function Application({
                         {!!files.length && <ul className="document-names">{files.map((file, index) =>
                           <li key={`${index}-${file.original_filename}`}>{file.original_filename}</li>)}</ul>}
                         {record.status === "draft" && (
-                          <UploadPicker key={files.length} action={addFile.bind(null, locale, reference, item.id)}
+                          item.id === "identity" ? <UploadPicker key={files.length} action={addFile.bind(null, locale, reference, item.id)}
                             labels={{ file: t.file, camera: t.camera, upload: t.upload, uploading: t.uploading, size: t.messages.file_size }} />
+                          : <DocumentModal locale={locale} reference={reference} type={item.id} title={t.document[label as keyof typeof t.document]} draft={drafts[item.id] ?? {}}>
+                            <UploadPicker key={files.length} action={addFile.bind(null, locale, reference, item.id)} labels={{ file: t.file, camera: t.camera, upload: t.upload, uploading: t.uploading, size: t.messages.file_size }} />
+                          </DocumentModal>
                         )}
                       </li>
                     );

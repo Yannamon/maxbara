@@ -1,4 +1,5 @@
 import type { QuizAnswers } from "../site/answers";
+import type { RegistrationDetails } from "./registration";
 
 export const checklistSource =
   "https://www.cepici.gouv.ci/public/frontend/assets/document/doc3/liste-des-pieces-a-fournir-sarl-capital-inf-a-10-000-000-f-cfa.pdf";
@@ -7,7 +8,7 @@ export const intakeFlags = [
   "companyPartner", "missingParentage", "abidjanRecord", "inKind", "representative", "cnpsWorker",
 ] as const;
 export type IntakeFlag = (typeof intakeFlags)[number];
-export type Intake = { answers: QuizAnswers; flags: Record<IntakeFlag, boolean> };
+export type Intake = { answers: QuizAnswers; flags: Record<IntakeFlag, boolean>; details?: RegistrationDetails };
 
 export const documentLimit = 3 * 1024 * 1024;
 

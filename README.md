@@ -1,74 +1,268 @@
 # Max Bara
 
-## Étape 1 · Fondations
+**Company formation and application management for Côte d’Ivoire.**
 
-Node.js 22.18 ou plus récent, Next.js, TypeScript, Tailwind CSS et Postgres (Supabase).
+Max Bara helps entrepreneurs prepare a company registration, understand estimated costs, organize supporting documents, and follow their application. French and English interfaces support applicants in Côte d’Ivoire and abroad, including those working through a local representative.
+
+## Features
+
+- **Company formation estimates:** server-calculated XOF estimates with itemized fees, optional services, and pricing review for unsupported scenarios.
+- **Registration checklist:** expandable CEPICI-based guidance with progress saved in the visitor’s browser.
+- **Applicant workspace:** email or SMS authentication, detailed application drafts, status tracking, and document management.
+- **Document preparation:** a dedicated modal for each non-ID document, saved preparation fields, and separate uploads for final official documents. Shareholder and director IDs use a direct uploader.
+- **Payments:** Paystack hosted checkout, server-side payment verification, signed webhooks, and separate manual payment confirmation.
+- **Appointments:** Google Calendar booking-page integration with an appointment-request fallback.
+- **Administration:** application search, submission deadlines, internal notes, document review, and estimated margins.
+- **Accessible motion:** a reversible hero background wipe and restrained interface transitions that respect reduced-motion preferences.
+
+## Technology
+
+| Area | Implementation |
+| --- | --- |
+| Application | Next.js 16 App Router, React 19, TypeScript |
+| Styling and motion | Tailwind CSS 4, custom CSS, Motion for React |
+| Authentication | Supabase Auth with server-side cookie sessions |
+| Database | Supabase PostgreSQL through `pg` |
+| Document storage | Private Supabase Storage bucket |
+| Payments | Paystack hosted checkout and verification API |
+| Testing | Node.js test runner and TypeScript checks |
+
+## Getting started
+
+### Prerequisites
+
+- Node.js **22.18 or newer** and npm.
+- A Supabase project with access to its database connection details.
+- Paystack test credentials to exercise online payments.
+- Docker and the Supabase CLI only if running Supabase locally.
+
+### 1. Install the application
 
 ```sh
+git clone https://github.com/Yannamon/maxbara.git
+cd maxbara
 npm ci
-npm test
-npm run build
-npm run dev
 ```
 
-## Étape 2 · Site public
+Copy the environment template:
 
-La page française est à `/` et la version anglaise à `/en`. Le formulaire gratuit demande la forme juridique, le capital, le secteur, le forfait, l’adresse, le mode de signature et le besoin d’un code import-export. Le serveur calcule le devis et les réponses restent dans l’URL pour retrouver le résultat ou changer de langue.
+```sh
+cp .env.example .env.local
+```
 
-Vérifier le devis Essentiel avec les réponses par défaut (149 000 FCFA), puis sélectionner le code import-export (179 000 FCFA). Avec la domiciliation, le notaire et le code import-export, le total est de 500 600 FCFA. Pour une autre forme juridique ou un autre capital, le résultat demande une étude tarifaire. « Commencer » ouvre le parcours de création d’un dossier.
+On Windows PowerShell, use `Copy-Item .env.example .env.local` and `npm.cmd` if your shell prevents running `npm`.
 
-### Base de démonstration
+### 2. Configure environment variables
 
-Avec Docker et une [CLI Supabase](https://supabase.com/docs/guides/local-development) disponibles, démarrer une base locale neuve et charger les données de démonstration.
+Fill in `.env.local` using values from your own accounts. The example file contains placeholders only.
+
+| Variable | Purpose |
+| --- | --- |
+| `SUPABASE_URL` | Supabase project API URL; required for authentication and storage. |
+| `SUPABASE_PUBLISHABLE_KEY` | Publishable key for user authentication. |
+| `SUPABASE_SECRET_KEY` | Server-only secret key for private document storage. |
+| `DATABASE_URL` | PostgreSQL connection string, including the database password; required for application records. |
+| `APP_URL` | Exact application origin, including the development port; required for production Paystack callbacks. |
+| `PAYSTACK_SECRET_KEY` | Server-only Paystack test or live API key. |
+| `PAYSTACK_WEBHOOK_SECRET` | Dedicated webhook signing secret, when enabled in Paystack. |
+| `APPOINTMENT_BOOKING_URL` | Optional public Google Calendar appointment-schedule booking link. |
+
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are also supported and take precedence over their unprefixed equivalents. Database and secret API keys must remain server-only.
+
+**Authentication and database access are separate connections.** A Supabase HTTPS API URL cannot be used as `DATABASE_URL`. Copy a PostgreSQL connection string from the Supabase project’s **Connect** panel. Use the session pooler when your local network cannot reach the direct IPv6 database address; choose a connection mode appropriate for your production host.
+
+Replace the password placeholder completely, including its square brackets. Percent-encode special characters in the password. The database password is distinct from a Supabase API key and an applicant’s login password. Restart the server after changing environment variables.
+
+### 3. Apply database migrations
+
+Apply the SQL files in `supabase/migrations` to the same Supabase project used for authentication, in this order:
+
+| Migration | Purpose |
+| --- | --- |
+| `20261119000000_foundation.sql` | Users, companies, cases, quotes, documents, payments, and access restrictions. |
+| `20261119000100_client_intake.sql` | Intake data, duplicate-payment protection, and private document bucket. |
+| `20261119000200_admin.sql` | Review timestamps and administrative event tokens. |
+| `20261124000000_appointments.sql` | Appointment requests. |
+| `20261124000100_document_forms_paystack.sql` | Document preparation drafts and Paystack payment fields. |
+
+For a hosted project, run each unapplied migration through the Supabase SQL Editor or your established Supabase migration workflow. On an existing database, apply only missing migrations; the foundation and admin migrations are not intended to be rerun.
+
+For a local Supabase instance:
 
 ```sh
 npx supabase start
-cp .env.example .env.local
-npm run db:seed
+npx supabase migration up --local
 ```
 
-Sur une base locale déjà démarrée, appliquer la migration avec `npx supabase migration up --local` avant le peuplement. Le script charge les trois dossiers et leurs devis dans une transaction, avec des identifiants fixes pour permettre plusieurs exécutions. Utiliser une base de développement pour les données de démonstration.
+Use the local connection details supplied by Supabase in `.env.local`.
+
+### 4. Configure authentication
+
+Enable **Email** authentication in Supabase Auth and set its Site URL to your application origin. Create an account at `/login`, confirm the email if required, and sign in.
+
+SMS sign-in additionally requires the Phone provider and an SMS provider. The SMS flow accepts Ivorian phone numbers. Email-authenticated applicants can submit international contact numbers in their application without completing an Ivorian phone login. Only a verified Ivorian Auth phone is stored in the profile phone column.
+
+### 5. Start development
+
+```sh
+npm run dev
+```
+
+Open `http://localhost:3000`. To use another local port:
+
+```sh
+npm run dev -- --hostname 127.0.0.1 --port 3100
+```
+
+Keep the Supabase Auth Site URL and `APP_URL` aligned with the origin you actually use.
+
+## Main routes
+
+| Feature | French | English |
+| --- | --- | --- |
+| Homepage | `/` | `/en` |
+| Estimate | `/devis` | `/en/quote` |
+| Preparation checklist | `/checklist` | `/en/checklist` |
+| New application | `/commencer` | `/en/start` |
+| Application list | `/dossiers` | `/en/cases` |
+| Application details | `/dossiers/[reference]` | `/en/cases/[reference]` |
+| Appointments | `/rendez-vous` | `/en/appointments` |
+| Administration | `/admin` | `/en/admin` |
+
+The shared email sign-in page is `/login`; the applicant dashboard is `/dashboard`.
+
+## Application and document workflow
+
+1. Sign in and choose **Start a new application**, or continue from an estimate.
+2. Enter applicant contacts, company activities and capital, shareholders, managers, registered office, and any representation requirements.
+3. Save the draft. Supported scenarios receive a server-calculated estimate; other scenarios are saved for pricing review without an automatic quote.
+4. Open individual document forms to prepare details. Upload the final documents separately, including any required signatures, authentication, or translations.
+5. Upload shareholder and director IDs directly, then send the completed application to Max Bara for review.
+
+Document drafts do not satisfy final-document requirements. Files remain private, are checked for supported formats, and have a **3 MB** limit. Uploads support PDF, JPEG, PNG, WebP, and recognized HEIC/HEIF formats. Browser photo compression may reduce oversized JPEG, PNG, and WebP images.
+
+Application details and document drafts are stored in PostgreSQL. The public checklist’s completion state is stored only in the current browser. Application form answers are retained on the page after a save failure, but are not a browser-persisted backup.
+
+## Paystack setup
+
+Start with a Paystack **test** key. Set `PAYSTACK_SECRET_KEY`, `APP_URL`, and the matching `PAYSTACK_WEBHOOK_SECRET` if dedicated webhook signing is enabled. A public key is not needed for the hosted redirect checkout used here.
+
+Configure this publicly reachable endpoint in Paystack:
+
+```text
+https://YOUR-DOMAIN/api/paystack/webhook
+```
+
+The application supplies `/api/paystack/callback` automatically when initializing checkout. A webhook cannot reach `localhost`; use a public deployment or a development tunnel for webhook testing.
+
+Payment behavior:
+
+- Only the application owner can initiate checkout, and a final XOF estimate is required.
+- The amount comes from the stored quote. Whole FCFA amounts are multiplied by 100 for the Paystack API.
+- Server verification checks the reference, amount, currency, test/live mode, and payment metadata before confirming payment.
+- Callbacks and signed webhooks can safely confirm the same payment repeatedly without duplicating the payment event.
+- Pending checkout links are reused. Verified failed or abandoned attempts can retry with a new reference.
+- Modern timestamped signatures are required when a dedicated webhook secret is configured; otherwise the legacy API-key signature is supported.
+- Manual payment remains separate and cannot replace an active Paystack checkout.
+
+Payment methods offered in hosted checkout depend on the Paystack account and market. Card or mobile-money availability is not guaranteed by the app. Test and live credentials and webhook settings must belong to the same mode.
+
+## Appointment setup
+
+Set `APPOINTMENT_BOOKING_URL` to your Google Calendar appointment-schedule booking page. Applicants then choose an available time on Google’s booking page. These bookings are managed in Google Calendar and are not synchronized into the app’s request list.
+
+When no booking link is configured, signed-in applicants can request a preferred date, time, timezone, and topic. Requests remain **requested**, not confirmed. Administrators can review them on the appointment page. This fallback does not reserve calendar availability or send automatic emails; applicants may add a pending reminder to their own Google Calendar after saving.
+
+## Administration
+
+Create an application once to establish the operator’s profile, then assign its role through a trusted database session:
 
 ```sql
-select c.reference, c.status, q.total_fcfa, q.requires_verification
-from public.cases c
-join public.quotes q on q.case_id = c.id
-where c.reference like 'MB-DEMO-%'
-order by c.reference;
+update public.users
+set role = 'admin'
+where auth_user_id = 'REPLACE_WITH_OPERATOR_AUTH_UUID';
 ```
 
-| Référence | Statut | Total FCFA |
-| --- | --- | ---: |
-| MB-DEMO-001 | draft | 149 000 |
-| MB-DEMO-002 | submitted | 479 000 |
-| MB-DEMO-003 | delivered | 450 000 |
+Administrative pages enforce the role on the server. Operators can review applications, document drafts and uploaded files, maintain internal notes and next steps, track review and delivery deadlines, and confirm manual payments. The configured review and delivery periods are internal tracking targets, not guaranteed government processing times.
 
-Les sept tables utilisent la sécurité au niveau des lignes. Les rôles navigateur `anon` et `authenticated` ont zéro accès direct aux tables à cette étape.
+## Development commands
 
-### Hypothèses tarifaires
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the development server. |
+| `npm run typecheck` | Check TypeScript without emitting files. |
+| `npm test` | Run the Node.js test suite. |
+| `npm run build` | Build the production application. |
+| `npm start` | Serve the production build. |
+| `npm run db:seed` | Insert demonstration cases into a configured development database. |
 
-- La grille couvre la SARL à 1 000 000 FCFA de capital. Les autres scénarios nécessitent une étude tarifaire.
-- Les forfaits incluent les frais de constitution du scénario. La domiciliation de 12 mois s’ajoute en cas d’absence d’adresse, et le notaire s’ajoute uniquement sur sélection. Le calcul utilise par défaut des statuts sous seing privé.
-- Agrément est une estimation à partir de 750 000 FCFA. Un montant propre au secteur nécessite une vérification.
-- La date renseigne le jour de consultation des sources tarifaires. Le GUFE (RCCM et dépôt au greffe), le code import-export et la publication en ligne correspondent à la grille CEPICI consultée. Les autres montants du cahier des charges sont provisoires et portent `verifiedOn: null`. Les devis conservent cette information pour le badge « A VERIFIER » de l’étape 4. [Grille CEPICI pour la SARL](https://www.cepici.gouv.ci/public/frontend/assets/document/doc3/liste-des-pieces-a-fournir-sarl-capital-inf-a-10-000-000-f-cfa.pdf)
+Before publishing changes:
 
-## Étape 3 · Dossiers clients
+```sh
+npm run typecheck
+npm test
+npm run build
+```
 
-Appliquer les migrations Supabase, puis renseigner les quatre variables de `.env.example` dans `.env.local`. Utiliser la clé publiable pour Auth et conserver la clé secrète ou `service_role` côté serveur pour le stockage privé. Pour Vercel, renseigner ces variables dans le projet avant la compilation et utiliser une connexion Supabase Postgres adaptée aux fonctions serveur.
+The automated suite covers pricing, intake validation, document requirements and draft validation, file signatures, database URL validation, administrative filtering and deadlines, payment amount matching, and webhook signature verification. A passing local suite does not replace an end-to-end Paystack test against your own test account.
 
-Activer le fournisseur Phone et configurer le prestataire SMS dans Supabase Auth. Pour tester sans SMS sur une base locale, suivre [la procédure OTP de test de Supabase](https://supabase.com/docs/guides/auth/testing-auth-flows). Configurer un numéro ivoirien de test au format `225` suivi de dix chiffres. Réserver les codes fixes à la configuration locale. La migration crée le bucket privé `case-documents`.
+Use `npm run db:seed` only with a development database. The seed uses fixed identifiers so it can be rerun without duplicating its demonstration records.
 
-1. Depuis un devis SARL, cliquer sur « Commencer », vérifier le numéro puis renseigner la société. La page du dossier conserve le devis calculé côté serveur.
-2. Ajouter les pièces applicables, une à la fois. Les fichiers restent privés. Le dossier transmis est reçu par Max Bara pour examen. La date affichée reste « À confirmer » jusqu’à ce qu’une date soit enregistrée.
-3. Enregistrer le mode de paiement. Orange Money, MTN MoMo, Wave et carte sont des choix sans débit. Après un paiement hors ligne, un opérateur peut confirmer un paiement manuel depuis l’URL du dossier.
-4. Pour tester la confirmation manuelle, utiliser un second compte et attribuer le rôle `admin` à son profil côté base. Pour un compte ayant déjà créé un dossier, exécuter `update public.users set role = 'admin' where auth_user_id = '<UUID Auth de l’opérateur>';`. Le statut payé peut être remis en attente depuis la même page.
+## Project structure
 
-La checklist couvre la SARL chiffrée par le simulateur. Elle distingue les statuts sous seing privé et notariés et ajoute les pièces d’après les situations renseignées. Pour la domiciliation Max Bara, le contrat peut être ajouté s’il est déjà disponible. Chaque document est examiné par l’équipe après transmission. [Liste du CEPICI](https://www.cepici.gouv.ci/public/frontend/assets/document/doc3/liste-des-pieces-a-fournir-sarl-capital-inf-a-10-000-000-f-cfa.pdf)
+```text
+src/
+  app/          Localized routes, layouts, and Paystack HTTP endpoints
+  site/         Public pages, translations, checklist, and motion components
+  intake/       Applications, document forms, uploads, and appointments
+  dashboard/    Applicant workspace and email authentication actions
+  admin/        Operator pages, authorization, and case administration
+  payments/     Paystack initialization, verification, and signature checks
+  server/       PostgreSQL access and quote calculation
+  config/       Pricing and environment validation
+supabase/
+  migrations/   Versioned database schema changes
+scripts/        Automated tests and demonstration data
+public/         Static brand assets
+```
 
-## Étape 4 · Administration
+## Deployment
 
-Appliquer la migration `20261119000200_admin.sql`. Se connecter avec un compte opérateur et ouvrir `/admin` ou suivre le lien « Administration » depuis « Mes dossiers ». La page anglaise est à `/en/admin`. Le rôle `admin` reste géré en base, selon la procédure de l’étape 3.
+Deploy to a Node.js-compatible Next.js host. The app requires server rendering, server actions, route handlers, and PostgreSQL access; it is not a static export.
 
-- Filtrer par société ou référence, statut ou échéance. Les deux compteurs affichent les dossiers ouverts et en retard.
-- Les deux délais internes partent de la transmission à Max Bara. La première revue se clôture avec « Marquer la revue terminée » et la livraison avec le statut « Livré ». Un retour en brouillon efface les délais de cette transmission. La date prévue et la prochaine étape apparaissent dans l’espace client après enregistrement.
-- Les notes internes, les documents privés, la marge brute estimée et les badges « A VERIFIER » sont accessibles depuis l’administration. La marge correspond au dernier devis moins le coût plancher enregistré avec ce devis. Les pièces PDF, JPEG, PNG et WebP s’ouvrent dans le navigateur. Les autres pièces peuvent être téléchargées.
+1. Configure the environment variables on the host, using the production HTTPS origin as `APP_URL`.
+2. Apply all unapplied migrations to the target Supabase project.
+3. Set the Supabase Auth Site URL for the deployment and confirm the required authentication providers.
+4. Configure the Paystack webhook and matching test/live credentials.
+5. Run the production checks, build, and deploy.
+6. Verify sign-in, draft creation, private uploads, appointment access, and a Paystack test transaction with webhook delivery.
+
+Keep `.env.local`, database passwords, API secrets, generated builds, and uploaded applicant documents out of Git. The environment template contains no real credentials. Browser roles have no direct access to application tables; authenticated server actions and server-only integrations handle access.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Sign-in is unavailable | Supabase URL and publishable key, enabled Auth provider, and server restart after configuration changes. |
+| Signed in, but application data is unavailable | PostgreSQL `DATABASE_URL`, connectivity, and applied migrations. Auth keys alone do not connect the database. |
+| Password authentication fails | Correct database password, percent-encoding, and removal of template square brackets. |
+| Direct database connection times out | IPv6 reachability; use the session pooler when the local network needs IPv4. |
+| Missing table or column | Apply the corresponding unapplied migration to the same project used by the app. |
+| Document draft or upload fails | Ownership, draft status, document schema migration, private bucket, storage secret, format, and file size. |
+| Paystack button is disabled | Valid `PAYSTACK_SECRET_KEY` and `APP_URL`; restart after changes. |
+| Payment is still pending | Verify API response, matching amount and mode, webhook URL, signature secret, and delivery logs. |
+| Appointments show a request form | `APPOINTMENT_BOOKING_URL` is not configured; requests do not confirm a calendar slot. |
+
+## Registration guidance and pricing scope
+
+The public checklist focuses on a SARL with capital below 10 million FCFA and links to CEPICI documents. Automatic pricing covers the configured SARL scenario at 1,000,000 FCFA capital; other forms and capital amounts require review. Some fee components remain provisional and retain their verification status in saved quotes.
+
+Requirements depend on legal form, activities, contributions, documents, and country of execution. Overseas applicants should confirm power-of-attorney authentication, translations, and original-document delivery with CEPICI and the relevant Ivorian consulate. Preparation forms are not substitutes for official or notarized documents.
+
+Official references:
+
+- [CEPICI registration forms and checklists](https://www.cepici.ci/index.php/creation-entreprise)
+- [Supabase database connections](https://supabase.com/docs/guides/database/connecting-to-postgres)
+- [Paystack payment integration](https://paystack.com/docs/payments/accept-payments/)
+- [Paystack webhook verification](https://paystack.com/docs/payments/webhooks/)
+- [Google Calendar booking-page sharing](https://support.google.com/calendar/answer/10733297)
